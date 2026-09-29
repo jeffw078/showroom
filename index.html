@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0d0c" />
+  <title>Pellens | Showroom</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <script type="importmap">
+    { "imports": {
+      "three": "./assets/vendor/three/three.module.min.js",
+      "three/addons/": "./assets/vendor/three/addons/"
+    } }
+  </script>
+</head>
+<body>
+  <main class="showroom" id="showroom">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="Pellens">
+        <img src="./assets/brand/logo.png" width="140" height="46" alt="Pellens" />
+      </a>
+      <div class="media-switch" role="group" aria-label="Tipo de visualização">
+        <button id="photoMode" type="button" aria-pressed="true">FOTOS</button>
+        <button id="modelMode" type="button" aria-pressed="false" aria-describedby="mediaStatus">3D</button>
+      </div>
+      <div class="top-actions">
+        <div class="counter" aria-live="polite"><span id="currentIndex">01</span><i></i><span id="totalCount">13</span></div>
+        <a class="system-button" href="https://www.pellens.com.br/sistema" id="systemButton"><span>Acessar sistema</span><span aria-hidden="true">→</span></a>
+      </div>
+    </header>
+
+    <section class="hero" aria-label="Produto selecionado">
+      <div class="stage" id="stage">
+        <div class="image-track" id="imageTrack">
+          <img id="mainImage" class="main-image current" src="assets/products/optimized/ADHARA-1920.webp" srcset="assets/products/optimized/ADHARA-1280.webp 1280w, assets/products/optimized/ADHARA-1920.webp 1920w" sizes="100vw" alt="Conjunto ADHARA" draggable="false" fetchpriority="high" decoding="async" />
+        </div>
+        <div class="image-shade"></div>
+        <div class="model-stage" id="modelStage" hidden></div>
+        <p id="mediaStatus" class="media-status" role="status" hidden></p>
+        <div class="fabric-controls" id="fabricControls" hidden></div>
+
+        <div class="hero-copy" id="heroCopy">
+          <p class="eyebrow">SHOWROOM PELLENS</p>
+          <h1 id="productName">ADHARA</h1>
+          <p class="tagline" id="productPhrase">Seu melhor dia começa em uma noite realmente bem dormida.</p>
+        </div>
+
+        <button class="detail-button" id="detailButton" type="button" aria-label="Ver detalhes internos do colchão">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5 12 4l8 3.5L12 11 4 7.5Z"/><path d="m4 12 8 3.5 8-3.5"/><path d="m4 16.5 8 3.5 8-3.5"/></svg>
+          <span>Detalhes</span>
+        </button>
+
+        <div class="media-tools" aria-label="Controles da imagem">
+          <button id="zoomIn" type="button" aria-label="Aumentar zoom">+</button>
+          <button id="zoomOut" type="button" aria-label="Diminuir zoom">−</button>
+          <button id="resetZoom" type="button" aria-label="Restaurar zoom">↺</button>
+          <button id="fullscreen" type="button" aria-label="Ver em tela cheia">⛶</button>
+        </div>
+
+        <button class="nav-arrow prev" id="prevProduct" type="button" aria-label="Produto anterior">‹</button>
+        <button class="nav-arrow next" id="nextProduct" type="button" aria-label="Próximo produto">›</button>
+      </div>
+    </section>
+
+    <section class="selector-wrap" aria-label="Seleção de conjuntos">
+      <div class="component-tabs" id="componentTabs" role="tablist" aria-label="Peça do conjunto" hidden>
+        <button id="baseTab" type="button" role="tab" aria-selected="true" aria-controls="productRail" data-category="base">Base</button>
+        <button id="mattressTab" type="button" role="tab" aria-selected="false" aria-controls="productRail" data-category="mattress" tabindex="-1">Colchão</button>
+        <button id="headboardTab" type="button" role="tab" aria-selected="false" aria-controls="productRail" data-category="headboard" tabindex="-1">Cabeceira</button>
+      </div>
+      <div class="selector-head">
+        <span id="selectorLabel">DESLIZE PARA CONHECER A COLEÇÃO</span>
+        <span class="autoplay-status"><i></i><span id="autoplayLabel">TROCA AUTOMÁTICA · 5S</span></span>
+      </div>
+      <div class="product-rail" id="productRail" tabindex="0"></div>
+    </section>
+  </main>
+
+  <section class="screen-warning" aria-label="Tela pequena">
+    <div class="screen-warning-card">
+      <div class="screen-warning-logo">
+        <img src="./assets/brand/logo.png" alt="">
+      </div>
+      <h2>Experiência criada para telas maiores</h2>
+      <p>Abra este showroom em um tablet ou computador para visualizar a coleção completa.</p>
+      <a href="https://www.pellens.com.br/sistema" id="smallScreenSystemButton" class="warning-button">Acessar sistema <span>→</span></a>
+    </div>
+  </section>
+
+  <dialog class="detail-modal" id="detailModal">
+    <div class="modal-shell">
+      <div class="modal-header">
+        <div><span class="modal-kicker">ESTRUTURA INTERNA</span><h2 id="detailTitle">ADHARA</h2></div>
+        <button class="modal-close" id="closeModal" type="button" aria-label="Fechar">×</button>
+      </div>
+      <div class="modal-media">
+        <img id="detailImage" alt="Estrutura interna do colchão" decoding="async" />
+        <div id="detailFallback" class="detail-fallback" hidden>
+          <p>Imagem técnica ainda não cadastrada para este conjunto.</p>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
