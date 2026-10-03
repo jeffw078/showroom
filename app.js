@@ -20,10 +20,11 @@ const TRANSITION_MS = 620;
 const REDUCED_MOTION = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const SHOWROOM_SCREEN = matchMedia('(min-width: 1px)');
 const COMPONENTS = {
-  base: { label: 'Base', folder: 'bases', prefix: 'base', options: ['Clássica', 'Bipartida', 'Flutuante'] },
-  mattress: { label: 'Colchão', folder: 'colchoes', prefix: 'colchao', options: ['Reto', 'Alto', 'Borda larga'] },
-  headboard: { label: 'Cabeceira', folder: 'cabeceiras', prefix: 'cabeceira', options: ['Inteira', 'Painéis', 'Faixas'] }
+  base: { label: 'Base', fileKey: 'base' },
+  mattress: { label: 'Colchão', fileKey: 'colchao' },
+  headboard: { label: 'Cabeceira', fileKey: 'cabeceira' }
 };
+const MODEL_NAMES = products.filter(p => p.name !== 'SÉRIE ESPECIAL').map(p => p.name);
 const CATEGORY_KEYS = Object.keys(COMPONENTS);
 // 30% de uma volta completa: 108° ao todo, distribuídos em ±54°.
 const CAMERA = { angleLimit: 54, elevation: 75 };
@@ -53,9 +54,12 @@ const state = {
   viewer: null,
   modelTimeout: null,
   fabricColors: null,
-  colors: { base: '#a99d90', headboard: '#82766c' },
+  colors: { base: null, headboard: null },
   category: 'base',
-  configuration: { base: 0, mattress: 0, headboard: 0 }
+  conjunto: 'ADHARA',
+  ambiente: 0,
+  environmentRequest: 0,
+  configuration: { base: 'ADHARA', mattress: 'ADHARA', headboard: 'ADHARA' }
 };
 
 const $ = s => document.querySelector(s);
@@ -70,7 +74,9 @@ const els = {
   mediaStatus: $('#mediaStatus'), autoplayLabel: $('#autoplayLabel'),
   tabs: $('#componentTabs'), selectorLabel: $('#selectorLabel'),
   selector: $('.selector-wrap'), counter: $('.counter'),
-  prev: $('#prevProduct'), next: $('#nextProduct'), fabrics: $('#fabricControls')
+  prev: $('#prevProduct'), next: $('#nextProduct'), fabrics: $('#fabricControls'),
+  sceneControls: $('#sceneControls'),
+  environmentSelect: $('#environmentSelect'), setSelect: $('#setSelect')
 };
 
 const pad = n => String(n).padStart(2, '0');
@@ -98,9 +104,9 @@ function createCards() {
     const category = COMPONENTS[state.category];
     els.rail.setAttribute('role', 'tabpanel');
     els.rail.setAttribute('aria-labelledby', els.tabs.querySelector(`[data-category="${state.category}"]`).id);
-    els.rail.innerHTML = category.options.map((name, i) => `
-      <button class="product-card component-card ${state.configuration[state.category] === i ? 'active' : ''}" data-option="${i}" type="button" aria-label="Selecionar ${category.label}: ${name}" aria-pressed="${state.configuration[state.category] === i}">
-        <img src="${thumbnailPath(products[i])}" alt="" width="320" height="230" draggable="false" decoding="async">
+    els.rail.innerHTML = MODEL_NAMES.map((name, i) => `
+      <button class="product-card component-card ${state.configuration[state.category] === name ? 'active' : ''}" data-option="${name}" type="button" aria-label="Selecionar ${category.label}: ${name}" aria-pressed="${state.configuration[state.category] === name}">
+        <img src="${thumbnailPath(products.find(p => p.name === name))}" alt="" width="320" height="230" draggable="false" loading="lazy" decoding="async">
         <span class="index">${pad(i + 1)}</span><strong>${name}</strong>
       </button>`).join('');
     return;
@@ -120,7 +126,7 @@ els.rail.addEventListener('click', e => {
     const card = e.target.closest('.product-card');
     if (!card) return;
     if (state.mode === 'model') {
-      state.configuration[state.category] = Number(card.dataset.option);
+      state.configuration[state.category] = card.dataset.option;
       createCards();
       updateConfigurationCopy();
       showModel();
@@ -155,8 +161,12 @@ els.tabs.addEventListener('keydown', e => {
 });
 
 function updateConfigurationCopy() {
-  els.name.textContent = 'Seu conjunto';
-  els.phrase.textContent = CATEGORY_KEYS.map(key => `${COMPONENTS[key].label}: ${COMPONENTS[key].options[state.configuration[key]]}`).join(' · ');
+  const choices = Object.values(state.configuration);
+  const completeSet = choices.every(name => name === choices[0]) ? choices[0] : null;
+  state.conjunto = completeSet || 'custom';
+  els.setSelect.value = state.conjunto;
+  els.name.textContent = completeSet || 'Seu conjunto';
+  els.phrase.textContent = CATEGORY_KEYS.map(key => `${COMPONENTS[key].label}: ${state.configuration[key]}`).join(' · ');
 }
 
 function preload(index) {
@@ -182,6 +192,7 @@ function updateZoom() {
 }
 
 let viewerLibrary;
+let catalogLibrary;
 function ensureViewerLibrary() {
   viewerLibrary ??= import('./showroom-scene.js').catch(error => {
     viewerLibrary = null;
@@ -189,30 +200,58 @@ function ensureViewerLibrary() {
   });
   return viewerLibrary;
 }
+function ensureCatalog() {
+  catalogLibrary ??= import('./catalogo.js');
+  return catalogLibrary;
+}
+
+async function selectAmbiente() {
+  const request = ++state.environmentRequest;
+  state.ambiente = Number(els.environmentSelect.value);
+  if (!state.viewer) return;
+  const catalog = await ensureCatalog();
+  try {
+    const loaded = await state.viewer.setAmbiente(catalog.modelURL(catalog.catalogo.ambientes[state.ambiente]), () =>
+      request === state.environmentRequest && state.mode === 'model');
+    if (loaded && request === state.environmentRequest) showMediaStatus();
+  } catch (_) {
+    if (request === state.environmentRequest) showMediaStatus('Não foi possível abrir este ambiente. Selecione outro para tentar novamente.');
+  }
+}
+els.environmentSelect.addEventListener('change', selectAmbiente);
+els.setSelect.addEventListener('change', () => {
+  state.conjunto = els.setSelect.value;
+  if (!MODEL_NAMES.includes(state.conjunto)) return;
+  CATEGORY_KEYS.forEach(key => { state.configuration[key] = state.conjunto; });
+  createCards();
+  updateConfigurationCopy();
+  showModel();
+});
 
 async function showModel() {
   const request = ++state.mediaRequest;
   const selection = { ...state.configuration };
-  const paths = Object.fromEntries(CATEGORY_KEYS.map(key => {
-    const category = COMPONENTS[key];
-    return [key, `assets/models/${category.folder}/${category.prefix}_${pad(selection[key] + 1)}.glb`];
-  }));
   clearTimeout(state.modelTimeout);
   els.modelStage.setAttribute('aria-busy', 'true');
   showMediaStatus(state.viewer?.loaded ? '' : 'Carregando seu conjunto 3D…');
   try {
-    const library = await ensureViewerLibrary();
+    const [library, catalog] = await Promise.all([ensureViewerLibrary(), ensureCatalog()]);
     if (request !== state.mediaRequest || state.mode !== 'model') return;
+    const paths = Object.fromEntries(CATEGORY_KEYS.map(key => [
+      COMPONENTS[key].fileKey,
+      catalog.modelURL(catalog.catalogo.conjuntos[selection[key]][COMPONENTS[key].fileKey])
+    ]));
     state.viewer ??= new library.ShowroomScene(els.modelStage, CAMERA);
     state.fabricColors = library.FABRIC_COLORS;
     createFabricControls();
-    state.viewer.setBaseColor(state.colors.base);
-    state.viewer.setHeadboardColor(state.colors.headboard);
     state.viewer.setActive(true);
     state.modelTimeout = setTimeout(() => {
       if (request === state.mediaRequest) showMediaStatus('O conjunto está demorando para carregar. Selecione uma peça para tentar novamente ou volte a FOTOS.');
     }, 20000);
-    const committed = await state.viewer.setConfiguration(paths, () => request === state.mediaRequest && state.mode === 'model');
+    const [committed] = await Promise.all([
+      state.viewer.setConfiguration(paths, () => request === state.mediaRequest && state.mode === 'model'),
+      state.viewer.setAmbiente(catalog.modelURL(catalog.catalogo.ambientes[state.ambiente]), () => state.mode === 'model')
+    ]);
     if (committed && request === state.mediaRequest) {
       clearTimeout(state.modelTimeout);
       showMediaStatus();
@@ -222,7 +261,7 @@ async function showModel() {
     if (request === state.mediaRequest) {
       clearTimeout(state.modelTimeout);
       els.modelStage.setAttribute('aria-busy', 'false');
-      showMediaStatus('Não foi possível carregar uma das peças. Selecione novamente para tentar ou volte a FOTOS.');
+      showMediaStatus('Não foi possível carregar uma peça ou o ambiente. Selecione novamente para tentar ou volte a FOTOS.');
     }
   }
 }
@@ -232,6 +271,7 @@ function createFabricControls() {
   els.fabrics.innerHTML = ['base', 'headboard'].map(key => `
     <div class="fabric-group" role="group" aria-label="Cor da ${key === 'base' ? 'base' : 'cabeceira'}">
       <span>${key === 'base' ? 'Base' : 'Cabeceira'}</span>
+      <button type="button" class="fabric-original" data-fabric="${key}" data-color="original" aria-pressed="${state.colors[key] === null}">Original</button>
       ${Object.entries(state.fabricColors).map(([name, color]) => `
         <button type="button" class="fabric-swatch" data-fabric="${key}" data-color="${color}" style="--fabric-color:${color}" aria-label="${key === 'base' ? 'Base' : 'Cabeceira'}: ${name}" title="${name}" aria-pressed="${state.colors[key] === color}"></button>`).join('')}
     </div>`).join('');
@@ -248,14 +288,16 @@ function setHeadboardColor(color) {
 }
 function updateFabricSelection() {
   els.fabrics.querySelectorAll('[data-fabric]').forEach(button => {
-    button.setAttribute('aria-pressed', String(state.colors[button.dataset.fabric] === button.dataset.color));
+    const selected = button.dataset.color === 'original' ? state.colors[button.dataset.fabric] === null : state.colors[button.dataset.fabric] === button.dataset.color;
+    button.setAttribute('aria-pressed', String(selected));
   });
 }
 els.fabrics.addEventListener('click', e => {
   const swatch = e.target.closest('[data-fabric]');
   if (!swatch) return;
-  if (swatch.dataset.fabric === 'base') setBaseColor(swatch.dataset.color);
-  else setHeadboardColor(swatch.dataset.color);
+  const color = swatch.dataset.color === 'original' ? null : swatch.dataset.color;
+  if (swatch.dataset.fabric === 'base') setBaseColor(color);
+  else setHeadboardColor(color);
 });
 
 function setMediaMode(mode) {
@@ -272,6 +314,7 @@ function setMediaMode(mode) {
   els.autoplayLabel.textContent = model ? 'MONTE SEU CONJUNTO' : 'TROCA AUTOMÁTICA · 5S';
   els.selectorLabel.textContent = model ? 'ESCOLHA UMA OPÇÃO PARA COMPOR SEU CONJUNTO' : 'DESLIZE PARA CONHECER A COLEÇÃO';
   els.tabs.hidden = !model;
+  els.sceneControls.hidden = !model;
   els.fabrics.hidden = !model;
   els.detailButton.hidden = model;
   els.prev.hidden = model;
